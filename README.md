@@ -38,6 +38,16 @@ WebAppの**リソースグループのアクセス制御(IAM)**を開きます�
 その後、Saveします。
 
 
+### マネージドIDにKeyVaultのアクセス制御を与える
+
+証明書を格納しているKeyVaultを開き、アクセス制御(IAM)を開きます。（アクセスポリシーではありません）
+
+以下のロールと以下のメンバーでアクセス許可を行います。
+
+- `Role`: `KeyVault Contributor` (Key Vault 共同作成者)
+- `Member`: WebApp名
+
+その後、Saveします。
 
 ### KeyVaultのアクセスポリシーに`Microsoft Azure App Service`を登録
 
