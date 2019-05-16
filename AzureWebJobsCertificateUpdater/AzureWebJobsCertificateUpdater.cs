@@ -26,7 +26,7 @@ namespace AzureWebJobsCertificateUpdater
             var WEBSITE_SITE_NAME = GetEnvironment("WEBSITE_SITE_NAME");
 
             // AppSettings "CertificationUpdater:xxx"
-            var DOMAIN = AppSettings.CertificateUpdater.Domain;
+            var DOMAINS = AppSettings.CertificateUpdater.Domain.Split(",");
             var KEYVAULT_ID = AppSettings.CertificateUpdater.KeyVaultId;
             var KEYVAULT_CERTIFICATE_NAME = AppSettings.CertificateUpdater.CertificateName;
             var IS_FORCE_UPDATE = AppSettings.CertificateUpdater.ForceUpdate;
@@ -50,41 +50,44 @@ namespace AzureWebJobsCertificateUpdater
                 throw new Exception($"Invalid parameters or not found webapp. SubscriptionId='{SUBSCRIPTION_ID}', ResouceGroup='{WEBSITE_RESOURCE_GROUP}', Name='{WEBSITE_SITE_NAME}'");
             }
 
-            if (!IS_FORCE_UPDATE && needCreateOrUpdate(webSiteManagementClient, WEBSITE_RESOURCE_GROUP, WEBSITE_SITE_NAME, DOMAIN))
-            {
-                // 更新不要
-                return;
+            foreach(var domain in DOMAINS){
+
+                if (!IS_FORCE_UPDATE && NeedCreateOrUpdate(webSiteManagementClient, WEBSITE_RESOURCE_GROUP, WEBSITE_SITE_NAME, domain))
+                {
+                    // 更新不要
+                    return;
+                }
+
+                // KeyVaultへの参照を行い、最新の証明書の情報を得る
+                var certificate = webSiteManagementClient.Certificates.CreateOrUpdate(WEBSITE_RESOURCE_GROUP, WEBSITE_SITE_NAME, new Certificate()
+                {
+                    Location = webSite.Location,
+                    ServerFarmId = webSite.ServerFarmId,
+                    KeyVaultId = KEYVAULT_ID,
+                    KeyVaultSecretName = KEYVAULT_CERTIFICATE_NAME,
+                    Password = "", // TODO: PassPhraseが必要になったら改修する
+                });
+
+                // カスタムドメインの作成と証明書の紐づけを兼ねている
+                HostNameBinding result = webSiteManagementClient.WebApps.CreateOrUpdateHostNameBinding(WEBSITE_RESOURCE_GROUP, WEBSITE_SITE_NAME, domain, new HostNameBinding()
+                {
+                    Thumbprint = certificate.Thumbprint,
+                    SslState = SslState.SniEnabled,
+                });
+
+                // Done
+                Console.WriteLine($"更新しました。domain={domain}, ExpirationDate={certificate.ExpirationDate}, Thumbprint='{result.Thumbprint}'");
             }
-
-            // KeyVaultへの参照を行い、最新の証明書の情報を得る
-            var certificate = webSiteManagementClient.Certificates.CreateOrUpdate(WEBSITE_RESOURCE_GROUP, WEBSITE_SITE_NAME, new Certificate()
-            {
-                Location = webSite.Location,
-                ServerFarmId = webSite.ServerFarmId,
-                KeyVaultId = KEYVAULT_ID,
-                KeyVaultSecretName = KEYVAULT_CERTIFICATE_NAME,
-                Password = "", // TODO: PassPhraseが必要になったら改修する
-            });
-
-            // カスタムドメインの作成と証明書の紐づけを兼ねている
-            HostNameBinding result = webSiteManagementClient.WebApps.CreateOrUpdateHostNameBinding(WEBSITE_RESOURCE_GROUP, WEBSITE_SITE_NAME, DOMAIN, new HostNameBinding()
-            {
-                Thumbprint = certificate.Thumbprint,
-                SslState = SslState.SniEnabled,
-            });
-
-            // Done
-            Console.WriteLine($"更新しました。ExpirationDate={certificate.ExpirationDate}, Thumbprint='{result.Thumbprint}'");
         }
 
         /*
          * 証明書を作成or更新する必要があるかどうかチェックします。
          */
-        public static bool needCreateOrUpdate(WebSiteManagementClient webSiteManagementClient, string WEBSITE_RESOURCE_GROUP, string WEBSITE_SITE_NAME, string CERTIFICATE_DOMAIN)
+        public static bool NeedCreateOrUpdate(WebSiteManagementClient webSiteManagementClient, string websiteResourceGroup, string websiteSiteName, string certificateDomain)
         {
             try
             {
-                var hostNameBinding = webSiteManagementClient.WebApps.GetHostNameBinding(WEBSITE_RESOURCE_GROUP, WEBSITE_SITE_NAME, CERTIFICATE_DOMAIN);
+                var hostNameBinding = webSiteManagementClient.WebApps.GetHostNameBinding(websiteResourceGroup, websiteSiteName, certificateDomain);
                 if (hostNameBinding == null && hostNameBinding.Thumbprint == null)
                 {
                     // 「カスタムドメインを設定しているが、SSL設定をしていない（紐づく証明書が無い）場合。
@@ -93,7 +96,7 @@ namespace AzureWebJobsCertificateUpdater
                 }
 
                 // TODO: 1つのWebAppに複数証明書が紐づくことはあるのか設定上は出来そうな気がするが、これで大丈夫か不明。（複数ドメイン使った場合とか。）
-                Certificate currentCertificate = webSiteManagementClient.Certificates.Get(WEBSITE_RESOURCE_GROUP, WEBSITE_SITE_NAME);
+                Certificate currentCertificate = webSiteManagementClient.Certificates.Get(websiteResourceGroup, websiteSiteName);
 
                 // 紐づいている証明書の有効期限を確認する
                 if (currentCertificate != null && currentCertificate.ExpirationDate.HasValue && hostNameBinding.Thumbprint == currentCertificate.Thumbprint)

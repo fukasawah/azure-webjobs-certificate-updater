@@ -6,6 +6,7 @@ Azure WebJobs Certificate Updater
 - KeyVaultの証明書を使い、WebAppsのSSL設定を行う
     - 有効期限の30日前は何もしない
 - もしカスタムドメインとSSL設定が未設定の場合は行う
+- ワイルドカード証明書であれば同一サイト複数ドメインで設定可能
 
 SSL設定を行うため、Basic以上のプランである必要があります。
 
@@ -64,7 +65,7 @@ WebAppのApplication Settingsにて、以下の環境変数を設定します。
 
 | 変数名 | 意味 | 例 |
 |---|---|---|
-|`CertificateUpdater:Domain`| WebAppのSSL証明書をバインドするHostName(ドメイン名) | `foo.example.jp` |
+|`CertificateUpdater:Domain`| WebAppのSSL証明書をバインドするHostName(ドメイン名) カンマ区切りで複数指定可能 | `foo.example.jp,bar.example.jp` |
 |`CertificateUpdater:KeyVaultId`| 証明書が格納されているKeyVaultのリソースID | `/subscriptions/サブスクリプションID/resourceGroups/リソースグループ名/providers/Microsoft.KeyVault/vaults/KeyVault名` |
 |`CertificateUpdater:CertificateName`| KeyVaultに格納されている証明書の名前 | `foo-example-jp` |
 |`CertificateUpdater:ForceUpdate`| (Optional) 有効期限にかかわらず強制的に更新する。デフォルト:`false` | `false` or `true` |
